@@ -1,14 +1,19 @@
 require "socket"
 require "digest"
+require "timeout"
 require_relative "feed_service"
 
 module YesterlandFeed
   class Server
-    def initialize(feed_service, host: DEFAULT_HOST, port: DEFAULT_PORT, fetch_interval: DEFAULT_FETCH_INTERVAL, logger: YesterlandFeed.logger)
+    def initialize(feed_service, host: DEFAULT_HOST, port: DEFAULT_PORT, fetch_interval: DEFAULT_FETCH_INTERVAL, max_clients: 100, client_read_timeout: 10, logger: YesterlandFeed.logger)
       @feed_service = feed_service
       @host = host
       @port = port
       @fetch_interval = fetch_interval
+      @max_clients = max_clients
+      @client_read_timeout = client_read_timeout
+      @connection_tokens = SizedQueue.new(@max_clients)
+      @max_clients.times { @connection_tokens << true }
       @feed_mutex = Mutex.new
       @latest_feed = nil
       @logger = logger
@@ -56,15 +61,18 @@ module YesterlandFeed
       trap("TERM") { exit }
 
       loop do
+        token = @connection_tokens.pop
         socket = server.accept
-        Thread.new(socket) do |client|
+        Thread.new(socket, token) do |client, token|
           handle_client(client)
+        ensure
+          @connection_tokens << true
         end
       end
     end
 
     def handle_client(client)
-      request_line = client.gets
+      request_line = read_line_with_timeout(client)
       method, path, = request_line.to_s.split(" ", 3)
       headers = read_headers(client)
       @logger.debug { "[http] Request: #{method} #{path} headers=#{headers.keys.join(",")}" }
@@ -72,6 +80,10 @@ module YesterlandFeed
       response = response_for(method, path, headers)
       write_response(client, response)
       @logger.info { "[http] #{response[:status]} #{path} bytes=#{response[:body]&.bytesize || 0}" }
+    rescue Timeout::Error
+      response = request_timeout_response
+      write_response(client, response)
+      @logger.warn { "[http] Request timeout" }
     rescue => e
       @logger.warn { "[http] Handler error: #{e.class}: #{e.message}" }
     ensure
@@ -84,13 +96,17 @@ module YesterlandFeed
 
     def read_headers(client)
       headers = {}
-      while (line = client.gets)
+      while (line = read_line_with_timeout(client))
         break if line == "\r\n"
         if line =~ /\A([^:]+):\s*(.*)\r?\n\z/
           headers[Regexp.last_match(1).downcase] = Regexp.last_match(2).strip
         end
       end
       headers
+    end
+
+    def read_line_with_timeout(io)
+      Timeout.timeout(@client_read_timeout) { io.gets }
     end
 
     def response_for(method, path, headers)
@@ -155,6 +171,19 @@ module YesterlandFeed
       }
     end
 
+    def request_timeout_response
+      body = "Request timeout"
+      {
+        status: 408,
+        headers: {
+          "Content-Type" => "text/plain; charset=utf-8",
+          "Content-Length" => body.bytesize.to_s,
+          "Connection" => "close"
+        },
+        body: body
+      }
+    end
+
     def fresh?(feed, headers)
       inm = headers["if-none-match"]
       ims = headers["if-modified-since"]
@@ -188,6 +217,7 @@ module YesterlandFeed
       when 200 then "OK"
       when 304 then "Not Modified"
       when 404 then "Not Found"
+      when 408 then "Request Timeout"
       else "OK"
       end
 

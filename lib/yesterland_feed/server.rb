@@ -205,7 +205,7 @@ module YesterlandFeed
     def build_cache_headers(feed)
       headers = {
         "Connection" => "close",
-        "Cache-Control" => "public, max-age=#{DEFAULT_FETCH_INTERVAL}"
+        "Cache-Control" => "public, max-age=#{@fetch_interval}"
       }
       headers["ETag"] = feed[:etag] if feed[:etag]
       headers["Last-Modified"] = feed[:last_modified].httpdate if feed[:last_modified]

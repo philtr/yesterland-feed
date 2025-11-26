@@ -1,0 +1,40 @@
+#!/usr/bin/env ruby
+$LOAD_PATH.unshift(File.expand_path('../lib', __dir__))
+
+require 'yesterland_feed'
+require 'openssl'
+
+logger = YesterlandFeed.logger
+
+source_url = ENV.fetch('SOURCE_URL', YesterlandFeed::DEFAULT_SOURCE_URL)
+host = ENV.fetch('HOST', YesterlandFeed::DEFAULT_HOST)
+port = ENV.fetch('PORT', YesterlandFeed::DEFAULT_PORT).to_i
+feed_limit = ENV.fetch('FEED_LIMIT', YesterlandFeed::DEFAULT_FEED_LIMIT).to_i
+fetch_interval = YesterlandFeed::DEFAULT_FETCH_INTERVAL
+verify_env = ENV['VERIFY_SSL']
+
+verify_mode = if verify_env&.strip&.casecmp('false')&.zero? || verify_env == '0'
+  OpenSSL::SSL::VERIFY_NONE
+end
+
+fetcher = YesterlandFeed::HtmlFetcher.new(
+  verify_mode: verify_mode,
+  logger: logger
+)
+
+service = YesterlandFeed::FeedService.new(
+  source_url: source_url,
+  feed_limit: feed_limit,
+  fetcher: fetcher,
+  logger: logger
+)
+
+server = YesterlandFeed::Server.new(
+  service,
+  host: host,
+  port: port,
+  fetch_interval: fetch_interval,
+  logger: logger
+)
+
+server.start

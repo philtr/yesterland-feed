@@ -129,7 +129,7 @@ module YesterlandFeed
           <?xml version="1.0" encoding="UTF-8"?>
           <rss version="2.0">
             <channel>
-              <title>Yesterland What’s New (Unofficial)</title>
+              <title>Yesterland</title>
               <link>#{DEFAULT_SOURCE_URL}</link>
               <description>Feed is initializing, try again shortly.</description>
             </channel>

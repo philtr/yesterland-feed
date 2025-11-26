@@ -30,7 +30,7 @@ module YesterlandFeed
         <?xml version="1.0" encoding="UTF-8"?>
         <rss version="2.0">
           <channel>
-            <title>Yesterland What’s New (Unofficial)</title>
+            <title>Yesterland</title>
             <link>#{source_url}</link>
             <description>Unofficial RSS feed generated from Yesterland “What’s New” page.</description>
             <lastBuildDate>#{now.rfc2822}</lastBuildDate>

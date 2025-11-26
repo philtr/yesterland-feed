@@ -63,7 +63,7 @@ class YesterlandFeedTest < Minitest::Test
 
     doc = REXML::Document.new(rss)
     title = REXML::XPath.first(doc, '/rss/channel/title').text
-    assert_equal 'Yesterland What’s New (Unofficial)', title
+    assert_equal 'Yesterland', title
   end
 
   def test_fetcher_reads_local_file_path

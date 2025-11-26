@@ -84,6 +84,46 @@ class YesterlandFeedTest < Minitest::Test
     assert_includes html, "<dt>"
   end
 
+  def test_fetcher_sets_timeouts_on_http_client
+    response = Struct.new(:code, :message, :body) do
+      def is_a?(klass)
+        klass == Net::HTTPSuccess || super
+      end
+    end.new("200", "OK", "body")
+
+    fake_http = Struct.new(:use_ssl?, :open_timeout, :read_timeout, :verify_mode) do
+      def request(_req)
+        response = Thread.current[:fake_response]
+        response
+      end
+    end
+
+    http_client = Class.new do
+      attr_reader :http_instance
+
+      def start(_host, _port, use_ssl:)
+        @http_instance = fake_http = Struct.new(:use_ssl?, :open_timeout, :read_timeout, :verify_mode) do
+          def request(_req)
+            Thread.current[:fake_response]
+          end
+        end.new(use_ssl, nil, nil, nil)
+        Thread.current[:fake_response] = Struct.new(:code, :message, :body) do
+          def is_a?(klass)
+            klass == Net::HTTPSuccess || super
+          end
+        end.new("200", "OK", "body")
+        yield @http_instance
+      end
+    end.new
+
+    fetcher = YesterlandFeed::HtmlFetcher.new(http_client: http_client, open_timeout: 3, read_timeout: 4)
+
+    fetcher.fetch("https://example.com/path")
+
+    assert_equal 3, http_client.http_instance.open_timeout
+    assert_equal 4, http_client.http_instance.read_timeout
+  end
+
   def test_response_returns_304_when_etag_matches
     feed = {
       body: "rss-body",

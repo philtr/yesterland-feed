@@ -4,9 +4,11 @@ require "uri"
 
 module YesterlandFeed
   class HtmlFetcher
-    def initialize(http_client: Net::HTTP, verify_mode: nil, logger: YesterlandFeed.logger)
+    def initialize(http_client: Net::HTTP, verify_mode: nil, open_timeout: 10, read_timeout: 10, logger: YesterlandFeed.logger)
       @http_client = http_client
       @verify_mode = verify_mode
+      @open_timeout = open_timeout
+      @read_timeout = read_timeout
       @logger = logger
     end
 
@@ -15,6 +17,8 @@ module YesterlandFeed
       return fetch_file(uri) if uri.scheme.nil? || uri.scheme == "file"
 
       @http_client.start(uri.host, uri.port, use_ssl: uri.scheme == "https") do |http|
+        http.open_timeout = @open_timeout if @open_timeout
+        http.read_timeout = @read_timeout if @read_timeout
         http.verify_mode = @verify_mode if @verify_mode && http.use_ssl?
         @logger.info { "[http] GET #{uri} (ssl=#{http.use_ssl?}, verify_mode=#{http.verify_mode.inspect})" }
         req = Net::HTTP::Get.new(uri)

@@ -1,6 +1,6 @@
-require_relative 'entry_parser'
-require_relative 'rss_builder'
-require_relative 'html_fetcher'
+require_relative "entry_parser"
+require_relative "rss_builder"
+require_relative "html_fetcher"
 
 module YesterlandFeed
   class FeedService

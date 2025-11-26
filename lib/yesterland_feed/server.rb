@@ -1,7 +1,6 @@
-require 'socket'
-require 'thread'
-require 'digest'
-require_relative 'feed_service'
+require "socket"
+require "digest"
+require_relative "feed_service"
 
 module YesterlandFeed
   class Server
@@ -54,8 +53,8 @@ module YesterlandFeed
       server = TCPServer.new(@host, @port)
       @logger.info { "[http] Listening on #{@host}:#{@port}" }
 
-      trap('INT')  { exit }
-      trap('TERM') { exit }
+      trap("INT") { exit }
+      trap("TERM") { exit }
 
       loop do
         socket = server.accept
@@ -67,9 +66,9 @@ module YesterlandFeed
 
     def handle_client(client)
       request_line = client.gets
-      method, path, = request_line.to_s.split(' ', 3)
+      method, path, = request_line.to_s.split(" ", 3)
       headers = read_headers(client)
-      @logger.debug { "[http] Request: #{method} #{path} headers=#{headers.keys.join(',')}" }
+      @logger.debug { "[http] Request: #{method} #{path} headers=#{headers.keys.join(",")}" }
 
       response = response_for(method, path, headers)
       write_response(client, response)
@@ -77,7 +76,11 @@ module YesterlandFeed
     rescue => e
       @logger.warn { "[http] Handler error: #{e.class}: #{e.message}" }
     ensure
-      client.close rescue nil
+      begin
+        client.close
+      rescue
+        nil
+      end
     end
 
     def read_headers(client)
@@ -92,7 +95,7 @@ module YesterlandFeed
     end
 
     def response_for(method, path, headers)
-      return not_found_response unless method == 'GET' && serveable_path?(path)
+      return not_found_response unless method == "GET" && serveable_path?(path)
 
       feed = safe_feed
       cache_headers = build_cache_headers(feed)
@@ -101,7 +104,7 @@ module YesterlandFeed
         {
           status: 304,
           headers: cache_headers,
-          body: ''
+          body: ""
         }
       else
         {
@@ -116,7 +119,7 @@ module YesterlandFeed
     end
 
     def serveable_path?(path)
-      ['/', '/feed', '/rss'].include?(path)
+      ["/", "/feed", "/rss"].include?(path)
     end
 
     def safe_feed
@@ -154,8 +157,8 @@ module YesterlandFeed
     end
 
     def fresh?(feed, headers)
-      inm = headers['if-none-match']
-      ims = headers['if-modified-since']
+      inm = headers["if-none-match"]
+      ims = headers["if-modified-since"]
 
       etag_match = inm && feed[:etag] && inm.strip == feed[:etag]
       time_match = false
@@ -163,7 +166,7 @@ module YesterlandFeed
         begin
           ims_time = Time.httpdate(ims)
           time_match = ims_time >= feed[:last_modified]
-        rescue StandardError
+        rescue
           time_match = false
         end
       end
@@ -183,11 +186,11 @@ module YesterlandFeed
 
     def write_response(client, response)
       status_text = case response[:status]
-                    when 200 then "OK"
-                    when 304 then "Not Modified"
-                    when 404 then "Not Found"
-                    else "OK"
-                    end
+      when 200 then "OK"
+      when 304 then "Not Modified"
+      when 404 then "Not Found"
+      else "OK"
+      end
 
       client.print "HTTP/1.1 #{response[:status]} #{status_text}\r\n"
       response[:headers].each do |k, v|

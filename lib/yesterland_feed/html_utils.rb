@@ -1,17 +1,17 @@
-require 'cgi'
-require 'time'
+require "cgi"
+require "time"
 
 module YesterlandFeed
   module HtmlUtils
     EXTRA_ENTITY_MAP = {
-      '&rsquo;'  => '’',
-      '&lsquo;'  => '‘',
-      '&rdquo;'  => '”',
-      '&ldquo;'  => '“',
-      '&hellip;' => '…',
-      '&mdash;'  => '—',
-      '&ndash;'  => '–',
-      '&nbsp;'   => ' '
+      "&rsquo;" => "’",
+      "&lsquo;" => "‘",
+      "&rdquo;" => "”",
+      "&ldquo;" => "“",
+      "&hellip;" => "…",
+      "&mdash;" => "—",
+      "&ndash;" => "–",
+      "&nbsp;" => " "
     }.freeze
 
     EXTRA_ENTITY_REGEX = Regexp.union(EXTRA_ENTITY_MAP.keys)
@@ -31,11 +31,11 @@ module YesterlandFeed
 
     def escape_xml(str)
       str.to_s
-        .gsub('&', '&amp;')
-        .gsub('<', '&lt;')
-        .gsub('>', '&gt;')
-        .gsub('"', '&quot;')
-        .gsub("'", '&apos;')
+        .gsub("&", "&amp;")
+        .gsub("<", "&lt;")
+        .gsub(">", "&gt;")
+        .gsub('"', "&quot;")
+        .gsub("'", "&apos;")
     end
   end
 end

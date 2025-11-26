@@ -1,6 +1,6 @@
-require 'net/http'
-require 'openssl'
-require 'uri'
+require "net/http"
+require "openssl"
+require "uri"
 
 module YesterlandFeed
   class HtmlFetcher
@@ -12,9 +12,9 @@ module YesterlandFeed
 
     def fetch(url)
       uri = URI(url)
-      return fetch_file(uri) if uri.scheme.nil? || uri.scheme == 'file'
+      return fetch_file(uri) if uri.scheme.nil? || uri.scheme == "file"
 
-      @http_client.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
+      @http_client.start(uri.host, uri.port, use_ssl: uri.scheme == "https") do |http|
         http.verify_mode = @verify_mode if @verify_mode && http.use_ssl?
         @logger.info { "[http] GET #{uri} (ssl=#{http.use_ssl?}, verify_mode=#{http.verify_mode.inspect})" }
         req = Net::HTTP::Get.new(uri)
@@ -28,7 +28,7 @@ module YesterlandFeed
     private
 
     def fetch_file(uri)
-      path = uri.scheme == 'file' ? uri.path : uri.to_s
+      path = (uri.scheme == "file") ? uri.path : uri.to_s
       @logger.info { "[file] Reading #{path}" }
       File.read(File.expand_path(URI.decode_www_form_component(path)))
     end

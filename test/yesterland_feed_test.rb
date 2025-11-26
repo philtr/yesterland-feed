@@ -1,10 +1,10 @@
-require_relative './test_helper'
+require_relative "test_helper"
 
 class YesterlandFeedTest < Minitest::Test
   DummyService = Struct.new(:fetch_and_build)
 
   def fixture_html
-    @fixture_html ||= File.read(File.expand_path('fixtures/whatsnew.html', __dir__))
+    @fixture_html ||= File.read(File.expand_path("fixtures/whatsnew.html", __dir__))
   end
 
   def test_decodes_curly_apostrophe
@@ -31,7 +31,6 @@ class YesterlandFeedTest < Minitest::Test
   end
 
   def test_builds_rss_from_fixture_with_limit_and_valid_xml
-    called_url = nil
     fetcher = Class.new do
       attr_reader :called_url
 
@@ -46,7 +45,7 @@ class YesterlandFeedTest < Minitest::Test
     end.new(fixture_html)
 
     service = YesterlandFeed::FeedService.new(
-      source_url: 'https://example.com/whatsnew.html',
+      source_url: "https://example.com/whatsnew.html",
       feed_limit: 10,
       fetcher: fetcher,
       parser: YesterlandFeed::EntryParser.new,
@@ -55,75 +54,75 @@ class YesterlandFeedTest < Minitest::Test
 
     rss = service.fetch_and_build
 
-    assert_equal 'https://example.com/whatsnew.html', fetcher.called_url
-    assert_equal 10, rss.scan('<item>').count
-    assert_includes rss, '70 Things that Closed in 70 Years: Year-by-Year at Disneyland'
-    assert_includes rss, 'Goodyear PeopleMover'
-    refute_includes rss, 'Francis’ Ladybug Boogie at Flik’s Fun Fair'
+    assert_equal "https://example.com/whatsnew.html", fetcher.called_url
+    assert_equal 10, rss.scan("<item>").count
+    assert_includes rss, "70 Things that Closed in 70 Years: Year-by-Year at Disneyland"
+    assert_includes rss, "Goodyear PeopleMover"
+    refute_includes rss, "Francis’ Ladybug Boogie at Flik’s Fun Fair"
 
     doc = REXML::Document.new(rss)
-    title = REXML::XPath.first(doc, '/rss/channel/title').text
-    assert_equal 'Yesterland', title
+    title = REXML::XPath.first(doc, "/rss/channel/title").text
+    assert_equal "Yesterland", title
   end
 
   def test_fetcher_reads_local_file_path
-    path = File.expand_path('fixtures/whatsnew.html', __dir__)
+    path = File.expand_path("fixtures/whatsnew.html", __dir__)
     fetcher = YesterlandFeed::HtmlFetcher.new
 
     html = fetcher.fetch(path)
 
-    assert_includes html, '<dl>'
-    assert_includes html, 'What&rsquo;s New at Yesterland?'
+    assert_includes html, "<dl>"
+    assert_includes html, "What&rsquo;s New at Yesterland?"
   end
 
   def test_fetcher_reads_file_uri
-    path = File.expand_path('fixtures/whatsnew.html', __dir__)
+    path = File.expand_path("fixtures/whatsnew.html", __dir__)
     fetcher = YesterlandFeed::HtmlFetcher.new
 
     html = fetcher.fetch("file://#{path}")
 
-    assert_includes html, '<dt>'
+    assert_includes html, "<dt>"
   end
 
   def test_response_returns_304_when_etag_matches
     feed = {
-      body: 'rss-body',
-      etag: 'abc123',
+      body: "rss-body",
+      etag: "abc123",
       last_modified: Time.now.utc
     }
     server = build_server_with_feed(feed)
 
-    response = server.send(:response_for, 'GET', '/rss', { 'if-none-match' => 'abc123' })
+    response = server.send(:response_for, "GET", "/rss", {"if-none-match" => "abc123"})
 
     assert_equal 304, response[:status]
-    assert_equal '', response[:body]
-    assert_equal 'abc123', response[:headers]['ETag']
-    assert_equal "public, max-age=#{YesterlandFeed::DEFAULT_FETCH_INTERVAL}", response[:headers]['Cache-Control']
+    assert_equal "", response[:body]
+    assert_equal "abc123", response[:headers]["ETag"]
+    assert_equal "public, max-age=#{YesterlandFeed::DEFAULT_FETCH_INTERVAL}", response[:headers]["Cache-Control"]
   end
 
   def test_response_returns_200_when_modified_since_time_is_stale
     last_modified = Time.now.utc
     feed = {
-      body: 'rss-body',
-      etag: 'abc123',
+      body: "rss-body",
+      etag: "abc123",
       last_modified: last_modified
     }
     server = build_server_with_feed(feed)
 
     ims = (last_modified - 60).httpdate
-    response = server.send(:response_for, 'GET', '/rss', { 'if-modified-since' => ims })
+    response = server.send(:response_for, "GET", "/rss", {"if-modified-since" => ims})
 
     assert_equal 200, response[:status]
-    assert_equal 'rss-body', response[:body]
-    assert_equal 'application/rss+xml; charset=utf-8', response[:headers]['Content-Type']
-    assert_equal "public, max-age=#{YesterlandFeed::DEFAULT_FETCH_INTERVAL}", response[:headers]['Cache-Control']
+    assert_equal "rss-body", response[:body]
+    assert_equal "application/rss+xml; charset=utf-8", response[:headers]["Content-Type"]
+    assert_equal "public, max-age=#{YesterlandFeed::DEFAULT_FETCH_INTERVAL}", response[:headers]["Cache-Control"]
   end
 
   private
 
   def build_server_with_feed(feed)
-    dummy_service = DummyService.new('rss-body')
-    server = YesterlandFeed::Server.new(dummy_service, host: '127.0.0.1', port: 0)
+    dummy_service = DummyService.new("rss-body")
+    server = YesterlandFeed::Server.new(dummy_service, host: "127.0.0.1", port: 0)
     server.instance_variable_set(:@latest_feed, feed)
     server
   end

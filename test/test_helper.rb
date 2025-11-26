@@ -1,6 +1,6 @@
-require 'minitest/autorun'
-require 'rexml/document'
+require "minitest/autorun"
+require "rexml/document"
 
-$LOAD_PATH.unshift(File.expand_path('../lib', __dir__))
+$LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
 
-require 'yesterland_feed'
+require "yesterland_feed"

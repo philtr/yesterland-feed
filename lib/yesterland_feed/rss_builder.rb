@@ -1,4 +1,4 @@
-require_relative 'html_utils'
+require_relative "html_utils"
 
 module YesterlandFeed
   class RssBuilder

@@ -1,6 +1,6 @@
-require_relative 'html_utils'
-require 'uri'
-require 'time'
+require_relative "html_utils"
+require "uri"
+require "time"
 
 module YesterlandFeed
   Entry = Struct.new(:title, :link, :date_str, :pub_date, keyword_init: true)
@@ -15,8 +15,8 @@ module YesterlandFeed
 
       html.scan(%r{<dt>(.*?)</dt>\s*<dd>(.*?)</dd>}mi) do |raw_date, dd_html|
         date_str = @decoder.decode_html_entities(raw_date.to_s.strip)
-                             .gsub(/&nbsp;/i, ' ')
-                             .gsub(/\s+/, ' ')
+          .gsub(/&nbsp;/i, " ")
+          .gsub(/\s+/, " ")
 
         if dd_html =~ %r{<a\s+[^>]*href="([^"]+)"[^>]*>(.*?)</a>}mi
           href = Regexp.last_match(1)
@@ -42,7 +42,7 @@ module YesterlandFeed
 
     def parse_time(date_str)
       Time.parse(date_str).utc
-    rescue StandardError
+    rescue
       nil
     end
   end

@@ -16,7 +16,6 @@ module YesterlandFeed
 
     def start
       @logger.info { "[server] Starting" }
-      refresh_feed!
       start_background_refresh
       listen
     end
@@ -43,8 +42,8 @@ module YesterlandFeed
       Thread.new do
         @logger.info { "[feed] Background refresh every #{@fetch_interval}s" }
         loop do
-          sleep @fetch_interval
           refresh_feed!
+          sleep @fetch_interval
         end
       end
     end

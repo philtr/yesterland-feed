@@ -1,6 +1,8 @@
 require_relative './test_helper'
 
 class YesterlandFeedTest < Minitest::Test
+  DummyService = Struct.new(:fetch_and_build)
+
   def fixture_html
     @fixture_html ||= File.read(File.expand_path('fixtures/whatsnew.html', __dir__))
   end
@@ -81,5 +83,48 @@ class YesterlandFeedTest < Minitest::Test
     html = fetcher.fetch("file://#{path}")
 
     assert_includes html, '<dt>'
+  end
+
+  def test_response_returns_304_when_etag_matches
+    feed = {
+      body: 'rss-body',
+      etag: 'abc123',
+      last_modified: Time.now.utc
+    }
+    server = build_server_with_feed(feed)
+
+    response = server.send(:response_for, 'GET', '/rss', { 'if-none-match' => 'abc123' })
+
+    assert_equal 304, response[:status]
+    assert_equal '', response[:body]
+    assert_equal 'abc123', response[:headers]['ETag']
+    assert_equal "public, max-age=#{YesterlandFeed::DEFAULT_FETCH_INTERVAL}", response[:headers]['Cache-Control']
+  end
+
+  def test_response_returns_200_when_modified_since_time_is_stale
+    last_modified = Time.now.utc
+    feed = {
+      body: 'rss-body',
+      etag: 'abc123',
+      last_modified: last_modified
+    }
+    server = build_server_with_feed(feed)
+
+    ims = (last_modified - 60).httpdate
+    response = server.send(:response_for, 'GET', '/rss', { 'if-modified-since' => ims })
+
+    assert_equal 200, response[:status]
+    assert_equal 'rss-body', response[:body]
+    assert_equal 'application/rss+xml; charset=utf-8', response[:headers]['Content-Type']
+    assert_equal "public, max-age=#{YesterlandFeed::DEFAULT_FETCH_INTERVAL}", response[:headers]['Cache-Control']
+  end
+
+  private
+
+  def build_server_with_feed(feed)
+    dummy_service = DummyService.new('rss-body')
+    server = YesterlandFeed::Server.new(dummy_service, host: '127.0.0.1', port: 0)
+    server.instance_variable_set(:@latest_feed, feed)
+    server
   end
 end

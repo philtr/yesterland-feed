@@ -1,5 +1,6 @@
 require 'socket'
 require 'thread'
+require 'digest'
 require_relative 'feed_service'
 
 module YesterlandFeed
@@ -25,7 +26,15 @@ module YesterlandFeed
 
     def refresh_feed!
       rss = @feed_service.fetch_and_build
-      @feed_mutex.synchronize { @latest_feed = rss }
+      now = Time.now.utc
+      etag = Digest::SHA256.hexdigest(rss)
+      @feed_mutex.synchronize do
+        @latest_feed = {
+          body: rss,
+          etag: etag,
+          last_modified: now
+        }
+      end
       @logger.info { "[feed] Updated (#{rss.bytesize} bytes)" }
     rescue => e
       @logger.warn { "[feed] Fetch failed: #{e.class}: #{e.message}" }
@@ -59,27 +68,50 @@ module YesterlandFeed
     def handle_client(client)
       request_line = client.gets
       method, path, = request_line.to_s.split(' ', 3)
-      @logger.debug { "[http] Request: #{method} #{path}" }
+      headers = read_headers(client)
+      @logger.debug { "[http] Request: #{method} #{path} headers=#{headers.keys.join(',')}" }
 
-      consume_headers(client)
-
-      if method == 'GET' && serveable_path?(path)
-        body = safe_feed_body
-        respond_ok(client, body)
-        @logger.debug { "[http] 200 #{path} bytes=#{body&.bytesize || 0}" }
-      else
-        respond_not_found(client)
-        @logger.debug { "[http] 404 #{path}" }
-      end
+      response = response_for(method, path, headers)
+      write_response(client, response)
+      @logger.info { "[http] #{response[:status]} #{path} bytes=#{response[:body]&.bytesize || 0}" }
     rescue => e
       @logger.warn { "[http] Handler error: #{e.class}: #{e.message}" }
     ensure
       client.close rescue nil
     end
 
-    def consume_headers(client)
+    def read_headers(client)
+      headers = {}
       while (line = client.gets)
         break if line == "\r\n"
+        if line =~ /\A([^:]+):\s*(.*)\r?\n\z/
+          headers[Regexp.last_match(1).downcase] = Regexp.last_match(2).strip
+        end
+      end
+      headers
+    end
+
+    def response_for(method, path, headers)
+      return not_found_response unless method == 'GET' && serveable_path?(path)
+
+      feed = safe_feed
+      cache_headers = build_cache_headers(feed)
+
+      if fresh?(feed, headers)
+        {
+          status: 304,
+          headers: cache_headers,
+          body: ''
+        }
+      else
+        {
+          status: 200,
+          headers: cache_headers.merge(
+            "Content-Type" => "application/rss+xml; charset=utf-8",
+            "Content-Length" => feed[:body].bytesize.to_s
+          ),
+          body: feed[:body]
+        }
       end
     end
 
@@ -87,40 +119,82 @@ module YesterlandFeed
       ['/', '/feed', '/rss'].include?(path)
     end
 
-    def safe_feed_body
+    def safe_feed
       @feed_mutex.synchronize { @latest_feed } || initializing_feed
     end
 
     def initializing_feed
-      <<~EMPTY
-        <?xml version="1.0" encoding="UTF-8"?>
-        <rss version="2.0">
-          <channel>
-            <title>Yesterland What’s New (Unofficial)</title>
-            <link>#{DEFAULT_SOURCE_URL}</link>
-            <description>Feed is initializing, try again shortly.</description>
-          </channel>
-        </rss>
-      EMPTY
+      {
+        body: <<~EMPTY,
+          <?xml version="1.0" encoding="UTF-8"?>
+          <rss version="2.0">
+            <channel>
+              <title>Yesterland What’s New (Unofficial)</title>
+              <link>#{DEFAULT_SOURCE_URL}</link>
+              <description>Feed is initializing, try again shortly.</description>
+            </channel>
+          </rss>
+        EMPTY
+        etag: nil,
+        last_modified: nil
+      }
     end
 
-    def respond_ok(client, body)
-      client.print "HTTP/1.1 200 OK\r\n"
-      client.print "Content-Type: application/rss+xml; charset=utf-8\r\n"
-      client.print "Content-Length: #{body.bytesize}\r\n"
-      client.print "Connection: close\r\n"
-      client.print "\r\n"
-      client.print body
-    end
-
-    def respond_not_found(client)
+    def not_found_response
       body = "Not found"
-      client.print "HTTP/1.1 404 Not Found\r\n"
-      client.print "Content-Type: text/plain; charset=utf-8\r\n"
-      client.print "Content-Length: #{body.bytesize}\r\n"
-      client.print "Connection: close\r\n"
+      {
+        status: 404,
+        headers: {
+          "Content-Type" => "text/plain; charset=utf-8",
+          "Content-Length" => body.bytesize.to_s,
+          "Connection" => "close"
+        },
+        body: body
+      }
+    end
+
+    def fresh?(feed, headers)
+      inm = headers['if-none-match']
+      ims = headers['if-modified-since']
+
+      etag_match = inm && feed[:etag] && inm.strip == feed[:etag]
+      time_match = false
+      if ims && feed[:last_modified]
+        begin
+          ims_time = Time.httpdate(ims)
+          time_match = ims_time >= feed[:last_modified]
+        rescue StandardError
+          time_match = false
+        end
+      end
+
+      etag_match || time_match
+    end
+
+    def build_cache_headers(feed)
+      headers = {
+        "Connection" => "close",
+        "Cache-Control" => "public, max-age=#{DEFAULT_FETCH_INTERVAL}"
+      }
+      headers["ETag"] = feed[:etag] if feed[:etag]
+      headers["Last-Modified"] = feed[:last_modified].httpdate if feed[:last_modified]
+      headers
+    end
+
+    def write_response(client, response)
+      status_text = case response[:status]
+                    when 200 then "OK"
+                    when 304 then "Not Modified"
+                    when 404 then "Not Found"
+                    else "OK"
+                    end
+
+      client.print "HTTP/1.1 #{response[:status]} #{status_text}\r\n"
+      response[:headers].each do |k, v|
+        client.print "#{k}: #{v}\r\n"
+      end
       client.print "\r\n"
-      client.print body
+      client.print response[:body].to_s
     end
   end
 end
